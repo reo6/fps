@@ -4,6 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-glium = "0.36.0"
-glutin = "0.32.3"
-image = "0.25.6"
+anyhow = "1.0.98"
+glam   = "0.30.4"
+
+# glium already re-exports glutin/winit, but we enable the helper features explicitly
+glium  = { version = "0.36.0", features = ["glutin_backend", "simple_window_builder"] }
+gltf = { version = "1.4.1", features = ["import"] }
+
+# explicit glutin for raw types (same semver as glium’s internal one)
+glutin = { version = "0.32.3", default-features = false }
+
+hecs   = "0.10.5"
+image  = "0.25.6"

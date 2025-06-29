@@ -1,127 +1,86 @@
-#[macro_use]
-extern crate glium;
-use glium::Surface;
-mod teapot;
+mod camera;
+mod ecs;
+mod model;
+mod render;
 
-fn main() {
+use anyhow::Result;
+use camera::Camera;
+use ecs::{rotation_system, MeshHandle, Transform};
+use glam::{Quat, Vec3};
+use glium::backend::glutin::SimpleWindowBuilder;
+use render::{Renderer, GliumRenderer};
+use std::time::Instant;
+
+fn main() -> Result<()> {
     let event_loop = glium::winit::event_loop::EventLoop::builder()
         .build()
-        .expect("event loop building");
-    let (window, display) = glium::backend::glutin::SimpleWindowBuilder::new()
-        .with_title("Glium tutorial #3")
+        .expect("create event-loop");
+
+    let (window, display) = SimpleWindowBuilder::new()
+        .with_title("fps")
+        .with_inner_size(1280, 720)
         .build(&event_loop);
 
+    let mut world = hecs::World::new();
 
-    let positions = glium::VertexBuffer::new(&display, &teapot::VERTICES).unwrap();
-    let normals = glium::VertexBuffer::new(&display, &teapot::NORMALS).unwrap();
-    let indices = glium::IndexBuffer::new(&display, glium::index::PrimitiveType::TrianglesList,
-                                        &teapot::INDICES).unwrap();
+    let mesh         = model::load_gltf("resources/monkey-smooth.gltf", &display)?;
+    // let mesh         = model::cube(&display)?;
+    let mut renderer = GliumRenderer::new(display)?;
+    let mesh_id      = renderer.meshes.len();
+    renderer.meshes.push(mesh);
 
-    let vertex_shader_src = r#"
-        #version 140
+    world.spawn((
+        Transform {
+            translation: Vec3::ZERO,
+            rotation:    Quat::IDENTITY,
+            scale:       Vec3::ONE,
+        },
+        MeshHandle(mesh_id),
+    ));
 
-        in vec3 position;
-        in vec3 normal;
+    {
+        let (w, h): (u32, u32) = window.inner_size().into();
+        world.spawn((Camera {
+            eye:    Vec3::new(3.0, 2.0, 3.0),
+            center: Vec3::ZERO,
+            up:     Vec3::Y,
+            fovy:   45_f32.to_radians(),
+            aspect: w as f32 / h as f32,
+            znear:  0.1,
+            zfar:   100.0,
+        },));
+    }
 
-        out vec3 v_normal;
+    event_loop
+        .run(move |event, el| {
+            use glium::winit::event::{Event, WindowEvent};
 
-        uniform mat4 matrix;
-        uniform mat4 perspective;
-
-        void main() {
-            v_normal = transpose(inverse(mat3(matrix))) * normal;
-            gl_Position = perspective * matrix * vec4(position, 1.0);
-        }
-    "#;
-    let fragment_shader_src = r#"
-        #version 140
-
-        in vec3 v_normal;
-        out vec4 color;
-        uniform vec3 u_light;
-
-        void main() {
-            float brightness = dot(normalize(v_normal), normalize(u_light));
-            vec3 dark_color = vec3(0.6, 0.0, 0.0);
-            vec3 regular_color = vec3(1.0, 0.0, 0.0);
-            color = vec4(mix(dark_color, regular_color, brightness), 1.0);
-        }
-    "#;
-    let program = glium::Program::from_source(&display, vertex_shader_src, fragment_shader_src, None).unwrap();
-
-    let light = [-1.0, 0.4, 0.9f32];
-    let mut t: f32 = 0.0;
-    #[allow(deprecated)]
-    event_loop.run(move |ev, window_target| {
-        match ev {
-            glium::winit::event::Event::WindowEvent { event, .. } => match event {
-                glium::winit::event::WindowEvent::CloseRequested => {
-                    window_target.exit();
+            match event {
+                Event::WindowEvent { event, .. } => match event {
+                    WindowEvent::CloseRequested => el.exit(),
+                    WindowEvent::Resized(sz) => {
+                        ecs::set_camera_aspect(&mut world, sz.width as f32 / sz.height as f32);
+                    }
+                    WindowEvent::RedrawRequested => {
+                        renderer.render(&world);
+                    }
+                    _ => {}
                 },
-                // We now need to render everyting in response to a RedrawRequested event due to the animation
-                glium::winit::event::WindowEvent::RedrawRequested => {
-                    let mut target = display.draw();
-                    target.clear_color_and_depth((0.0, 0.0, 0.0, 1.0), 1.0);
-                    t += 0.01;
-                    let x = t.sin() * 0.5;
-                    let y = t.cos() * 0.5;
-
-                    let perspective = {
-                        let (width, height) = target.get_dimensions();
-                        let aspect_ratio = height as f32 / width as f32;
-
-                        let fov: f32 = 3.141592 / 3.0;
-                        let zfar = 1024.0;
-                        let znear = 0.1;
-
-                        let f = 1.0 / (fov / 2.0).tan();
-
-                        [
-                            [f *   aspect_ratio   ,    0.0,              0.0              ,   0.0],
-                            [         0.0         ,     f ,              0.0              ,   0.0],
-                            [         0.0         ,    0.0,  (zfar+znear)/(zfar-znear)    ,   1.0],
-                            [         0.0         ,    0.0, -(2.0*zfar*znear)/(zfar-znear),   0.0],
-                        ]
+                Event::AboutToWait => {
+                    // -- update logic --
+                    let now = Instant::now();
+                    static mut LAST: Option<Instant> = None;
+                    let dt = unsafe { // FIXME
+                        let last = LAST.replace(now).unwrap_or(now);
+                        (now - last).as_secs_f32()
                     };
+                    rotation_system(&mut world, dt);
 
-                    let uniforms = uniform! {
-                        matrix: [
-                            [0.01, 0.0, 0.0, 0.0],
-                            [0.0, 0.01, 0.0, 0.0],
-                            [0.0, 0.0, 0.01, 0.0],
-                            [x, y, 2.0, 1.0f32 ],
-                        ],
-                        u_light: light,
-                        perspective: perspective
-                    };
-
-                    let params = glium::DrawParameters {
-                        depth: glium::Depth {
-                            test: glium::draw_parameters::DepthTest::IfLess,
-                            write: true,
-                            .. Default::default()
-                        },
-                        .. Default::default()
-                    };
-
-                    target.draw((&positions, &normals), &indices, &program, &uniforms,
-                                &params).unwrap();
-                    target.finish().unwrap();
-                },
-                // Because glium doesn't know about windows we need to resize the display
-                // when the window's size has changed.
-                glium::winit::event::WindowEvent::Resized(window_size) => {
-                    display.resize(window_size.into());
-                },
-                _ => (),
-            },
-            // By requesting a redraw in response to a RedrawEventsCleared event we get continuous rendering.
-            // For applications that only change due to user input you could remove this handler.
-            glium::winit::event::Event::AboutToWait => {
-                window.request_redraw();
-            },
-            _ => (),
-        }
-    })
-    .unwrap();
+                    // ask for next frame
+                    window.request_redraw();
+                }
+                _ => {}
+            }
+        })
+        .map_err(Into::into)
 }
