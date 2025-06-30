@@ -5,7 +5,7 @@ mod render;
 
 use anyhow::Result;
 use camera::Camera;
-use ecs::{rotation_system, MeshHandle, Transform};
+use ecs::{MeshHandle, Transform};
 use glam::{Quat, Vec3};
 use glium::backend::glutin::SimpleWindowBuilder;
 use render::{Renderer, GliumRenderer};
@@ -29,7 +29,7 @@ fn main() -> Result<()> {
     let mesh_id      = renderer.meshes.len();
     renderer.meshes.push(mesh);
 
-    world.spawn((
+    let object_ent = world.spawn((
         Transform {
             translation: Vec3::ZERO,
             rotation:    Quat::IDENTITY,
@@ -38,7 +38,8 @@ fn main() -> Result<()> {
         MeshHandle(mesh_id),
     ));
 
-    {
+
+    let camera_ent = {
         let (w, h): (u32, u32) = window.inner_size().into();
         world.spawn((Camera {
             eye:    Vec3::new(3.0, 2.0, 3.0),
@@ -48,8 +49,8 @@ fn main() -> Result<()> {
             aspect: w as f32 / h as f32,
             znear:  0.1,
             zfar:   100.0,
-        },));
-    }
+        },))
+    };
 
     event_loop
         .run(move |event, el| {
@@ -59,7 +60,9 @@ fn main() -> Result<()> {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => el.exit(),
                     WindowEvent::Resized(sz) => {
-                        ecs::set_camera_aspect(&mut world, sz.width as f32 / sz.height as f32);
+                        world.query_one_mut::<&mut crate::camera::Camera>(camera_ent).map(|mut cam| {
+                            cam.aspect = sz.width as f32 / sz.height as f32;
+                        });
                     }
                     WindowEvent::RedrawRequested => {
                         renderer.render(&world);
@@ -74,7 +77,9 @@ fn main() -> Result<()> {
                         let last = LAST.replace(now).unwrap_or(now);
                         (now - last).as_secs_f32()
                     };
-                    rotation_system(&mut world, dt);
+                    world.query_one_mut::<&mut Transform>(object_ent).map(|mut object| {
+                        object.rotation *= Quat::from_rotation_y(dt);
+                    });
 
                     // ask for next frame
                     window.request_redraw();

@@ -72,7 +72,6 @@ impl Renderer for GliumRenderer {
         let mut frame = self.display.draw();
         frame.clear_color_and_depth((0.1, 0.1, 0.15, 1.0), 1.0);
 
-        // Expect exactly one active camera in the world.
         let cam = match world.query::<&Camera>().iter().next() {
             Some((_, cam)) => *cam,
             None => {
