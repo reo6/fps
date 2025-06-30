@@ -30,21 +30,27 @@ impl GliumRenderer {
             uniform mat4 model;
             uniform mat4 view;
             uniform mat4 projection;
-            uniform vec3 light_dir;
-            out vec3 v_color;
+            out vec3 v_normal;
             void main() {
-                vec3 n = normalize(mat3(model) * normal);
-                float diff = max(dot(n, -light_dir), 0.0);
-                vec3 base = vec3(0.6, 0.6, 0.8);
-                v_color = base * diff + 0.1;
-                gl_Position = projection * view * model * vec4(position, 1.0);
+                mat4 modelview = view * model;
+                v_normal = transpose(inverse(mat3(modelview))) * normal;
+                gl_Position = projection * modelview * vec4(position, 1.0);
             }"#;
 
         const FRAG: &str = r#"
             #version 330 core
-            in  vec3 v_color;
+            in  vec3 v_normal;
             out vec4 color;
-            void main() { color = vec4(v_color, 1.0); }"#;
+            uniform vec3 light_dir;
+
+            void main() {
+                float brightness = dot(normalize(v_normal), normalize(light_dir));
+                vec3 dark_color = vec3(0.6, 0.0, 0.0);
+                vec3 regular_color = vec3(1.0, 0.0, 0.0);
+                color = vec4(mix(dark_color, regular_color, brightness), 1.0);
+            }"#;
+
+
 
         let program = Program::from_source(&display, VERT, FRAG, None)?;
 
