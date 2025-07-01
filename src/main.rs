@@ -2,6 +2,7 @@ mod camera;
 mod ecs;
 mod model;
 mod render;
+mod time;
 
 use anyhow::Result;
 use camera::Camera;
@@ -9,9 +10,10 @@ use ecs::{MeshHandle, Transform};
 use glam::{Quat, Vec3};
 use glium::backend::glutin::SimpleWindowBuilder;
 use render::{Renderer, GliumRenderer};
-use std::time::Instant;
 
 fn main() -> Result<()> {
+    const ROTATION_SPEED: f32 = 1.0;
+
     let event_loop = glium::winit::event_loop::EventLoop::builder()
         .build()
         .expect("create event-loop");
@@ -21,27 +23,28 @@ fn main() -> Result<()> {
         .with_inner_size(1280, 720)
         .build(&event_loop);
 
-    let mut world = hecs::World::new();
+    // Create ECS renderer which internally owns both the world and the renderer
+    let mut ecsr = {
+        let world = hecs::World::new();
+        let renderer = GliumRenderer::new(display.clone())?;
+        ecs::ECSRenderer::new(renderer, world)
+    };
 
-    let mesh         = model::load_gltf("resources/monkey-smooth.gltf", &display)?;
-    // let mesh         = model::cube(&display)?;
-    let mut renderer = GliumRenderer::new(display)?;
-    let mesh_id      = renderer.meshes.len();
-    renderer.meshes.push(mesh);
+    let mut time = time::Time::new();
 
-    let object_ent = world.spawn((
-        Transform {
-            translation: Vec3::ZERO,
-            rotation:    Quat::IDENTITY,
-            scale:       Vec3::ONE,
-        },
-        MeshHandle(mesh_id),
-    ));
+    let object_ent = {
+        let mesh = model::load_gltf("resources/monkey-smooth.gltf", &display)?;
+        ecsr.spawn_mesh(mesh, Transform {
+                translation: Vec3::ZERO,
+                rotation:    Quat::IDENTITY,
+                scale:       Vec3::ONE,
+        })
+    };
 
 
     let camera_ent = {
         let (w, h): (u32, u32) = window.inner_size().into();
-        world.spawn((Camera {
+        ecsr.world.spawn((Camera {
             eye:    Vec3::new(3.0, 2.0, 3.0),
             center: Vec3::ZERO,
             up:     Vec3::Y,
@@ -60,26 +63,26 @@ fn main() -> Result<()> {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => el.exit(),
                     WindowEvent::Resized(sz) => {
-                        world.query_one_mut::<&mut crate::camera::Camera>(camera_ent).map(|mut cam| {
+                        ecsr.world.query_one_mut::<&mut crate::camera::Camera>(camera_ent).map(|mut cam| {
                             cam.aspect = sz.width as f32 / sz.height as f32;
                         });
                     }
                     WindowEvent::RedrawRequested => {
-                        renderer.render(&world);
+                        ecsr.render();
                     }
                     _ => {}
                 },
                 Event::AboutToWait => {
-                    // -- update logic --
-                    let now = Instant::now();
-                    static mut LAST: Option<Instant> = None;
-                    let dt = unsafe { // FIXME
-                        let last = LAST.replace(now).unwrap_or(now);
-                        (now - last).as_secs_f32()
-                    };
-                    world.query_one_mut::<&mut Transform>(object_ent).map(|mut object| {
-                        object.rotation *= Quat::from_rotation_y(dt);
+                    time.tick();
+                    let dt = time.delta_seconds();
+                    ecsr.world.query_one_mut::<&mut Transform>(object_ent).map(|mut object| {
+                        object.rotation *= Quat::from_rotation_y(ROTATION_SPEED * dt);
                     });
+
+                    // despawn the object after 3 seconds
+                    if time.total_seconds() > 3.0 {
+                        ecsr.despawn_mesh(object_ent);
+                    }
 
                     // ask for next frame
                     window.request_redraw();
