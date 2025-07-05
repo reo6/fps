@@ -23,34 +23,8 @@ pub struct GliumRenderer {
 impl GliumRenderer {
     /// Create a new OpenGL renderer consuming the provided `display`.
     pub fn new(display: glium::Display<WindowSurface>) -> anyhow::Result<Self> {
-        const VERT: &str = r#"
-            #version 330 core
-            in  vec3 position;
-            in  vec3 normal;
-            uniform mat4 model;
-            uniform mat4 view;
-            uniform mat4 projection;
-            out vec3 v_normal;
-            void main() {
-                mat4 modelview = view * model;
-                v_normal = transpose(inverse(mat3(modelview))) * normal;
-                gl_Position = projection * modelview * vec4(position, 1.0);
-            }"#;
-
-        const FRAG: &str = r#"
-            #version 330 core
-            in  vec3 v_normal;
-            out vec4 color;
-            uniform vec3 light_dir;
-
-            void main() {
-                float brightness = dot(normalize(v_normal), normalize(light_dir));
-                vec3 dark_color = vec3(0.6, 0.0, 0.0);
-                vec3 regular_color = vec3(1.0, 0.0, 0.0);
-                color = vec4(mix(dark_color, regular_color, brightness), 1.0);
-            }"#;
-
-
+        const VERT: &str = include_str!("../resources/shaders/gl_solid_color.vert");
+        const FRAG: &str = include_str!("../resources/shaders/gl_solid_color.frag");
 
         let program = Program::from_source(&display, VERT, FRAG, None)?;
 
