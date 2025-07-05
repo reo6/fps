@@ -33,7 +33,7 @@ fn main() -> Result<()> {
     let mut time = time::Time::new();
 
     let object_ent = {
-        let mesh = model::load_gltf("resources/monkey-smooth.gltf", &display)?;
+        let mesh = model::load_gltf("resources/models/monkey.gltf", &display)?;
         ecsr.spawn_mesh(mesh, Transform {
                 translation: Vec3::ZERO,
                 rotation:    Quat::IDENTITY,
