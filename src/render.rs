@@ -6,13 +6,6 @@ use glam::Vec3;
 use hecs::World;
 use glium::glutin::surface::WindowSurface;
 
-/// Generic rendering backend trait.
-pub trait Renderer {
-    /// Render a single frame for the given `World`.
-    fn render(&mut self, world: &World);
-}
-
-/// Concrete OpenGL (glium) renderer implementing `Renderer`.
 pub struct GliumRenderer {
     display: glium::Display<WindowSurface>,
     program: Program,
@@ -21,7 +14,6 @@ pub struct GliumRenderer {
 }
 
 impl GliumRenderer {
-    /// Create a new OpenGL renderer consuming the provided `display`.
     pub fn new(display: glium::Display<WindowSurface>) -> anyhow::Result<Self> {
         const VERT: &str = include_str!("../resources/shaders/gl_solid_color.vert");
         const FRAG: &str = include_str!("../resources/shaders/gl_solid_color.frag");
@@ -39,17 +31,12 @@ impl GliumRenderer {
         
         Ok(Self { display, program, meshes: Vec::new(), params })
     }
-}
 
-impl Renderer for GliumRenderer {
-    fn render(&mut self, world: &World) {
-        let mut frame = self.display.draw();
-        frame.clear_color_and_depth((0.1, 0.1, 0.15, 1.0), 1.0);
-
+    fn draw_scene<S: Surface>(&self, world: &World, target: &mut S) {
         let cam = match world.query::<&Camera>().iter().next() {
             Some((_, cam)) => *cam,
             None => {
-                eprintln!("[renderer] No camera component found – skipping frame");
+                eprintln!("[renderer] No camera component found. Skipping frame");
                 return;
             }
         };
@@ -65,10 +52,21 @@ impl Renderer for GliumRenderer {
                 light_dir:  [light_dir.x, light_dir.y, light_dir.z],
             };
 
-            frame.draw(&mesh.vbuf, &mesh.ibuf, &self.program, &uniforms, &self.params)
-                 .unwrap();
+            target
+                .draw(&mesh.vbuf, &mesh.ibuf, &self.program, &uniforms, &self.params)
+                .unwrap();
         }
+    }
 
+    pub fn render_into<S: Surface>(&mut self, world: &World, target: &mut S) {
+        target.clear_color_and_depth((0.1, 0.1, 0.15, 1.0), 1.0);
+        self.draw_scene(world, target);
+    }
+
+    pub fn render(&mut self, world: &World) {
+        let mut frame = self.display.draw();
+        frame.clear_color_and_depth((0.1, 0.1, 0.15, 1.0), 1.0);
+        self.draw_scene(world, &mut frame);
         frame.finish().unwrap();
     }
 }
