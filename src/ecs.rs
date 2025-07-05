@@ -1,6 +1,6 @@
 use glam::{Mat4, Quat, Vec3};
 use hecs::{Entity, World};
-use crate::{render::{GliumRenderer, Renderer}, model};
+use crate::{render::GliumRenderer, model};
 
 /// This system joins the renderer and ECS,
 /// and provides tools to use them together
@@ -33,6 +33,12 @@ impl ECSRenderer {
     /// Render a single frame using the internal renderer & world.
     pub fn render(&mut self) {
         self.renderer.render(&self.world);
+    }
+
+    /// Render into an existing glium target surface. Useful for composing with
+    /// other render passes (e.g. Dear ImGui).
+    pub fn render_into<S: glium::Surface>(&mut self, target: &mut S) {
+        self.renderer.render_into(&self.world, target);
     }
 }
 
