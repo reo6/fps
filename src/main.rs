@@ -1,13 +1,14 @@
 mod camera;
 mod ecs;
 mod model;
+mod gltf_loader;
 mod render;
 mod time;
 mod ui;
 
 use anyhow::Result;
 use camera::Camera;
-use ecs::{MeshHandle, Transform};
+use ecs::{Transform};
 use glam::{Quat, Vec3, EulerRot};
 use glium::backend::glutin::SimpleWindowBuilder;
 use render::GliumRenderer;
@@ -35,11 +36,20 @@ fn main() -> Result<()> {
     let mut time = time::Time::new();
 
     let object_ent = {
-        let mesh = model::load_gltf("resources/models/monkey.gltf", &display)?;
-        ecsr.spawn_mesh(mesh, Transform {
-            translation: Vec3::ZERO,
+        let model_3d = gltf_loader::load_gltf("resources/models/tree.gltf", &display)?;
+        ecsr.spawn_mesh(model_3d, Transform {
+            translation: Vec3::new(0.0, -2.5, -5.0),
             rotation:    Quat::IDENTITY,
-            scale:       Vec3::ONE,
+            scale:       Vec3::new(0.01, 0.01, 0.01),
+        })
+    };
+
+    let ground_ent = {
+        let model_3d = gltf_loader::load_gltf("resources/models/plane.gltf", &display)?;
+        ecsr.spawn_mesh(model_3d, Transform {
+            translation: Vec3::new(0.0, -1.5, 0.0),
+            rotation:    Quat::IDENTITY,
+            scale:       Vec3::new(1.0, 1.0, 1.0),
         })
     };
 
