@@ -1,6 +1,7 @@
 use glam::{Mat4, Quat, Vec3};
 use hecs::{Entity, World};
-use crate::{render::GliumRenderer, model};
+use crate::render::GliumRenderer;
+use crate::model::Model;
 
 /// This system joins the renderer and ECS,
 /// and provides tools to use them together
@@ -15,16 +16,20 @@ impl ECSRenderer {
         Self { renderer, world }
     }
 
-    pub fn spawn_mesh(&mut self, mesh: model::Mesh, transform: Transform) -> Entity {
-        let mesh_id = self.renderer.meshes.len();
-        self.renderer.meshes.push(mesh);
-        self.world.spawn((transform, MeshHandle(mesh_id)))
+    pub fn spawn_mesh(&mut self, model: Model, transform: Transform) -> Entity {
+        let model_id = self.renderer.models.len();
+        self.renderer.models.push(model);
+
+        self.world.spawn((
+            transform,
+            ModelHandle(model_id),
+        ))
     }
 
     pub fn despawn_mesh(&mut self, entity: Entity) {
-        if let Ok(mesh_handle) = self.world.get::<&MeshHandle>(entity) {
-            if mesh_handle.0 < self.renderer.meshes.len() {
-                self.renderer.meshes.remove(mesh_handle.0);
+        if let Ok(model_handle) = self.world.get::<&ModelHandle>(entity) {
+            if model_handle.0 < self.renderer.models.len() {
+                self.renderer.models.remove(model_handle.0);
             }
         }
         let _ = self.world.despawn(entity);
@@ -56,4 +61,4 @@ impl Transform {
 }
 
 #[derive(Clone)]
-pub struct MeshHandle(pub usize);
+pub struct ModelHandle(pub usize);
