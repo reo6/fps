@@ -8,7 +8,7 @@ anyhow = "1.0.98"
 glam   = "0.30.4"
 
 glium  = { version = "0.35.0", features = ["glutin_backend", "simple_window_builder"] }
-gltf = { version = "1.4.1", features = ["import"] }
+gltf = { version = "1.4.1", features = ["import", "utils", "KHR_texture_transform"] }
 glutin = { version = "0.32.3", default-features = false }
 
 hecs   = "0.10.5"
