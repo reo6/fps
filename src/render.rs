@@ -1,12 +1,14 @@
 use crate::camera::Camera;
 use crate::ecs::{ModelHandle, Transform};
-use crate::model::{Model};
+use crate::model::{Model, Mesh};
 use glium::texture::{RawImage2d, SrgbTexture2d};
 use glium::{uniform, Program, Surface};
 use glium::uniforms::{MinifySamplerFilter, MagnifySamplerFilter, SamplerWrapFunction};
-use glam::Vec3;
+use glam::{Vec3, Vec4};
 use hecs::World;
 use glium::glutin::surface::WindowSurface;
+use image::io::Reader as ImageReader;
+use glium::draw_parameters::DepthTest;
 
 pub struct GliumRenderer {
     display: glium::Display<WindowSurface>,
@@ -16,6 +18,10 @@ pub struct GliumRenderer {
     pub models: Vec<Model>,
 
     params: glium::DrawParameters<'static>,
+
+    skybox_program: Program,
+    skybox_texture: SrgbTexture2d,
+    skybox_mesh: Mesh,
 }
 
 impl GliumRenderer {
@@ -39,13 +45,28 @@ impl GliumRenderer {
             },
             .. Default::default()
         };
-        
+
+        let sky_vert = include_str!("../resources/shaders/skybox.vert");
+        let sky_frag = include_str!("../resources/shaders/skybox.frag");
+        let skybox_program = Program::from_source(&display, sky_vert, sky_frag, None)?;
+
+        let image = ImageReader::open("resources/skyboxes/sky_24_2k.png")?.decode()?.to_rgba8();
+        let dimensions = image.dimensions();
+        let raw = RawImage2d::from_raw_rgba(image.into_raw(), dimensions);
+        let skybox_texture = SrgbTexture2d::new(&display, raw)?;
+
+        let cube_model = crate::gltf_loader::load_gltf("resources/models/cube.gltf", &display)?;
+        let skybox_mesh = cube_model.mesh;
+
         Ok(Self {
             display,
             program,
             white_tex,
             models: Vec::new(),
             params,
+            skybox_program,
+            skybox_texture,
+            skybox_mesh,
         })
     }
 
@@ -94,6 +115,38 @@ impl GliumRenderer {
                 &self.params,
             ).unwrap();
         }
+
+        // Render skybox
+        let mut sky_view = cam.view();
+        sky_view.w_axis = Vec4::new(0.0, 0.0, 0.0, 1.0);
+
+        let mut sampler = self.skybox_texture.sampled();
+        sampler = sampler.wrap_function(SamplerWrapFunction::Clamp);
+        sampler = sampler.minify_filter(MinifySamplerFilter::Linear);
+        sampler = sampler.magnify_filter(MagnifySamplerFilter::Linear);
+
+        let uniforms = uniform! {
+            view: sky_view.to_cols_array_2d(),
+            projection: cam.projection().to_cols_array_2d(),
+            equirect: sampler,
+        };
+
+        let sky_params = glium::DrawParameters {
+            depth: glium::Depth {
+                test: DepthTest::IfLessOrEqual,
+                write: false,
+                .. Default::default()
+            },
+            .. Default::default()
+        };
+
+        target.draw(
+            &self.skybox_mesh.vbuf,
+            &self.skybox_mesh.ibuf,
+            &self.skybox_program,
+            &uniforms,
+            &sky_params,
+        ).unwrap();
     }
 
     pub fn render_into<S: Surface>(&mut self, world: &World, target: &mut S) {
