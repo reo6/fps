@@ -14,6 +14,7 @@ use glam::{Quat, Vec3, EulerRot};
 use glium::backend::glutin::SimpleWindowBuilder;
 use render::GliumRenderer;
 use rapier3d::prelude::*;
+use rapier3d::prelude::LockedAxes;
 use rapier3d::na::{UnitQuaternion, Quaternion};
 
 fn main() -> Result<()> {
@@ -62,12 +63,19 @@ fn main() -> Result<()> {
     let ground_tr = *ecsr.world.get::<&Transform>(ground_ent).unwrap();
     let (axis, angle) = ground_tr.rotation.to_axis_angle();
     let rotation = vector![axis.x * angle, axis.y * angle, axis.z * angle];
+    let ground_half_height = 0.1;
+    let ground_half_extents_x = ground_tr.scale.x * 1.0;
+    let ground_half_extents_z = ground_tr.scale.z * 1.0;
     let ground_pos = Isometry::new(
-        vector![ground_tr.translation.x, ground_tr.translation.y, ground_tr.translation.z],
+        vector![
+            ground_tr.translation.x,
+            ground_tr.translation.y - ground_half_height,
+            ground_tr.translation.z
+        ],
         rotation,
     );
     let ground_rb = RigidBodyBuilder::fixed().position(ground_pos).build();
-    let ground_collider = ColliderBuilder::cuboid(10.0, 0.1, 10.0).build();
+    let ground_collider = ColliderBuilder::cuboid(ground_half_extents_x, ground_half_height, ground_half_extents_z).build();
     physics.add_rigid_body(ground_ent, ground_rb, ground_collider);
 
     // Add physics for object
@@ -78,8 +86,14 @@ fn main() -> Result<()> {
         vector![object_tr.translation.x, object_tr.translation.y, object_tr.translation.z],
         rotation,
     );
-    let object_rb = RigidBodyBuilder::dynamic().position(object_pos).build();
-    let object_collider = ColliderBuilder::cylinder(2.0, 0.2).build();
+    let object_rb = RigidBodyBuilder::dynamic()
+        .position(object_pos)
+        .locked_axes(LockedAxes::ROTATION_LOCKED_X | LockedAxes::ROTATION_LOCKED_Z)
+        .angular_damping(5.0)
+        .build();
+    let object_radius      = 0.2 * object_tr.scale.x;
+    let object_half_height = 2.0 * object_tr.scale.y;
+    let object_collider = ColliderBuilder::cylinder(object_half_height, object_radius).build();
     physics.add_rigid_body(object_ent, object_rb, object_collider);
 
 
