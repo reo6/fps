@@ -5,6 +5,7 @@ mod gltf_loader;
 mod render;
 mod time;
 mod ui;
+mod physics;
 
 use anyhow::Result;
 use camera::Camera;
@@ -12,6 +13,8 @@ use ecs::{Transform};
 use glam::{Quat, Vec3, EulerRot};
 use glium::backend::glutin::SimpleWindowBuilder;
 use render::GliumRenderer;
+use rapier3d::prelude::*;
+use rapier3d::na::{UnitQuaternion, Quaternion};
 
 fn main() -> Result<()> {
     let event_loop = glium::winit::event_loop::EventLoop::builder()
@@ -20,7 +23,7 @@ fn main() -> Result<()> {
 
     let (window, display) = SimpleWindowBuilder::new()
         .with_title("fps")
-        .with_inner_size(1280, 720)
+        .with_inner_size(1920, 1080)
         .build(&event_loop);
 
     // Create ECS renderer which internally owns both the world and the renderer
@@ -30,6 +33,8 @@ fn main() -> Result<()> {
         ecs::ECSRenderer::new(renderer, world)
     };
 
+    let mut physics = physics::Physics::new();
+
     // Dear ImGui integration
     let mut gui = ui::Gui::new(&display, &window)?;
 
@@ -38,7 +43,7 @@ fn main() -> Result<()> {
     let object_ent = {
         let model_3d = gltf_loader::load_gltf("resources/models/tree.gltf", &display)?;
         ecsr.spawn_mesh(model_3d, Transform {
-            translation: Vec3::new(0.0, -2.5, -5.0),
+            translation: Vec3::new(0.0, 2.5, -5.0),
             rotation:    Quat::IDENTITY,
             scale:       Vec3::new(0.01, 0.01, 0.01),
         })
@@ -49,9 +54,33 @@ fn main() -> Result<()> {
         ecsr.spawn_mesh(model_3d, Transform {
             translation: Vec3::new(0.0, -1.5, 0.0),
             rotation:    Quat::IDENTITY,
-            scale:       Vec3::new(1.0, 1.0, 1.0),
+            scale:       Vec3::new(10.0, 10.0, 10.0),
         })
     };
+
+    // Add physics for ground
+    let ground_tr = *ecsr.world.get::<&Transform>(ground_ent).unwrap();
+    let (axis, angle) = ground_tr.rotation.to_axis_angle();
+    let rotation = vector![axis.x * angle, axis.y * angle, axis.z * angle];
+    let ground_pos = Isometry::new(
+        vector![ground_tr.translation.x, ground_tr.translation.y, ground_tr.translation.z],
+        rotation,
+    );
+    let ground_rb = RigidBodyBuilder::fixed().position(ground_pos).build();
+    let ground_collider = ColliderBuilder::cuboid(10.0, 0.1, 10.0).build();
+    physics.add_rigid_body(ground_ent, ground_rb, ground_collider);
+
+    // Add physics for object
+    let object_tr = *ecsr.world.get::<&Transform>(object_ent).unwrap();
+    let (axis, angle) = object_tr.rotation.to_axis_angle();
+    let rotation = vector![axis.x * angle, axis.y * angle, axis.z * angle];
+    let object_pos = Isometry::new(
+        vector![object_tr.translation.x, object_tr.translation.y, object_tr.translation.z],
+        rotation,
+    );
+    let object_rb = RigidBodyBuilder::dynamic().position(object_pos).build();
+    let object_collider = ColliderBuilder::cylinder(2.0, 0.2).build();
+    physics.add_rigid_body(object_ent, object_rb, object_collider);
 
 
     let camera_ent = {
@@ -117,6 +146,7 @@ fn main() -> Result<()> {
                 },
                 Event::AboutToWait => {
                     time.tick();
+                    physics.step(time.delta_seconds(), &mut ecsr.world);
                     gui.prepare_frame(&window);
                     window.request_redraw();
                 }
