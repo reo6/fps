@@ -9,13 +9,14 @@ mod physics;
 
 use anyhow::Result;
 use camera::Camera;
-use ecs::{Transform};
+use ecs::{Transform, ModelHandle};
 use glam::{Quat, Vec3, EulerRot};
 use glium::backend::glutin::SimpleWindowBuilder;
 use render::GliumRenderer;
 use rapier3d::prelude::*;
 use rapier3d::prelude::LockedAxes;
 use rapier3d::na::{UnitQuaternion, Quaternion};
+use rand::Rng;
 
 fn main() -> Result<()> {
     let event_loop = glium::winit::event_loop::EventLoop::builder()
@@ -96,6 +97,12 @@ fn main() -> Result<()> {
     let object_collider = ColliderBuilder::cylinder(object_half_height, object_radius).build();
     physics.add_rigid_body(object_ent, object_rb, object_collider);
 
+    let sphere_model_id = {
+        let model = gltf_loader::load_gltf("resources/models/uvsphere-smooth.gltf", &display)?;
+        let id = ecsr.renderer.models.len();
+        ecsr.renderer.models.push(model);
+        id
+    };
 
     let camera_ent = {
         let (w, h): (u32, u32) = window.inner_size().into();
@@ -130,6 +137,44 @@ fn main() -> Result<()> {
                         ecsr.render_into(&mut target);
 
                         gui.render_with(&mut target, &window, |ui| {
+                            let spawn_clicked = ui.button("Spawn Sphere");
+                            if spawn_clicked {
+                                let mut rng = rand::thread_rng();
+                                let offset_x: f32 = rng.gen_range(-0.1..0.1);
+                                let offset_z: f32 = rng.gen_range(-0.1..0.1);
+                                let sphere_transform = Transform {
+                                    translation: Vec3::new(offset_x, 5.0, offset_z),
+                                    rotation:    Quat::IDENTITY,
+                                    scale:       Vec3::splat(0.5),
+                                };
+
+                                let sphere_ent = ecsr.world.spawn((
+                                    sphere_transform,
+                                    ModelHandle(sphere_model_id),
+                                ));
+
+                                let (axis, angle) = sphere_transform.rotation.to_axis_angle();
+                                let rotation = vector![axis.x * angle, axis.y * angle, axis.z * angle];
+                                let sphere_pos = Isometry::new(
+                                    vector![
+                                        sphere_transform.translation.x,
+                                        sphere_transform.translation.y,
+                                        sphere_transform.translation.z,
+                                    ],
+                                    rotation,
+                                );
+
+                                let sphere_rb = RigidBodyBuilder::dynamic()
+                                    .position(sphere_pos)
+                                    .linvel(vector![offset_x * 2.0, 0.0, offset_z * 2.0])
+                                    .build();
+
+                                let sphere_radius = 1.0 * sphere_transform.scale.x;
+                                let sphere_collider = ColliderBuilder::ball(sphere_radius).build();
+
+                                physics.add_rigid_body(sphere_ent, sphere_rb, sphere_collider);
+                            }
+
                             if let Ok(mut tr) = ecsr.world.query_one_mut::<&mut Transform>(object_ent) {
                                 // Translation controls
                                 let mut translation = [tr.translation.x, tr.translation.y, tr.translation.z];
