@@ -29,87 +29,88 @@ where
     // ---------- MATERIAL ----------
     let mut mat = Material::default();
 
-    let mat_idx  = primitive.material().index().context("primitive has no material")?;
-    let material = doc.materials().nth(mat_idx).unwrap();
-    let pbr      = material.pbr_metallic_roughness();
+    if let Some(mat_idx) = primitive.material().index() {
+        let material = doc.materials().nth(mat_idx).unwrap();
+        let pbr      = material.pbr_metallic_roughness();
 
-    // Factors --------------------------------------------------
-    mat.base_color_factor = pbr.base_color_factor();
-    mat.metal_factor      = pbr.metallic_factor();
-    mat.roughness_factor  = pbr.roughness_factor();
-    mat.emissive_factor   = material.emissive_factor();
+        // Factors --------------------------------------------------
+        mat.base_color_factor = pbr.base_color_factor();
+        mat.metal_factor      = pbr.metallic_factor();
+        mat.roughness_factor  = pbr.roughness_factor();
+        mat.emissive_factor   = material.emissive_factor();
 
-    // Helper to update sampler settings from glTF sampler
-    fn update_sampler(mat: &mut Material, t: &gltf::texture::Texture<'_>) {
-        let sampler_info = t.sampler();
-        mat.sampler.wrap_function.0 = match sampler_info.wrap_s() {
-            gltf::texture::WrappingMode::ClampToEdge => SamplerWrapFunction::Clamp,
-            gltf::texture::WrappingMode::MirroredRepeat => SamplerWrapFunction::Mirror,
-            gltf::texture::WrappingMode::Repeat => SamplerWrapFunction::Repeat,
-        };
-        mat.sampler.wrap_function.1 = match sampler_info.wrap_t() {
-            gltf::texture::WrappingMode::ClampToEdge => SamplerWrapFunction::Clamp,
-            gltf::texture::WrappingMode::MirroredRepeat => SamplerWrapFunction::Mirror,
-            gltf::texture::WrappingMode::Repeat => SamplerWrapFunction::Repeat,
-        };
-        if let Some(f) = sampler_info.mag_filter() {
-            mat.sampler.magnify_filter = match f {
-                gltf::texture::MagFilter::Nearest => MagnifySamplerFilter::Nearest,
-                gltf::texture::MagFilter::Linear => MagnifySamplerFilter::Linear,
+        // Helper to update sampler settings from glTF sampler
+        fn update_sampler(mat: &mut Material, t: &gltf::texture::Texture<'_>) {
+            let sampler_info = t.sampler();
+            mat.sampler.wrap_function.0 = match sampler_info.wrap_s() {
+                gltf::texture::WrappingMode::ClampToEdge => SamplerWrapFunction::Clamp,
+                gltf::texture::WrappingMode::MirroredRepeat => SamplerWrapFunction::Mirror,
+                gltf::texture::WrappingMode::Repeat => SamplerWrapFunction::Repeat,
             };
-        }
-        if let Some(f) = sampler_info.min_filter() {
-            mat.sampler.minify_filter = match f {
-                gltf::texture::MinFilter::Nearest => MinifySamplerFilter::Nearest,
-                gltf::texture::MinFilter::Linear => MinifySamplerFilter::Linear,
-                gltf::texture::MinFilter::NearestMipmapNearest => MinifySamplerFilter::NearestMipmapNearest,
-                gltf::texture::MinFilter::NearestMipmapLinear => MinifySamplerFilter::NearestMipmapLinear,
-                gltf::texture::MinFilter::LinearMipmapNearest => MinifySamplerFilter::LinearMipmapNearest,
-                gltf::texture::MinFilter::LinearMipmapLinear => MinifySamplerFilter::LinearMipmapLinear,
+            mat.sampler.wrap_function.1 = match sampler_info.wrap_t() {
+                gltf::texture::WrappingMode::ClampToEdge => SamplerWrapFunction::Clamp,
+                gltf::texture::WrappingMode::MirroredRepeat => SamplerWrapFunction::Mirror,
+                gltf::texture::WrappingMode::Repeat => SamplerWrapFunction::Repeat,
             };
+            if let Some(f) = sampler_info.mag_filter() {
+                mat.sampler.magnify_filter = match f {
+                    gltf::texture::MagFilter::Nearest => MagnifySamplerFilter::Nearest,
+                    gltf::texture::MagFilter::Linear => MagnifySamplerFilter::Linear,
+                };
+            }
+            if let Some(f) = sampler_info.min_filter() {
+                mat.sampler.minify_filter = match f {
+                    gltf::texture::MinFilter::Nearest => MinifySamplerFilter::Nearest,
+                    gltf::texture::MinFilter::Linear => MinifySamplerFilter::Linear,
+                    gltf::texture::MinFilter::NearestMipmapNearest => MinifySamplerFilter::NearestMipmapNearest,
+                    gltf::texture::MinFilter::NearestMipmapLinear => MinifySamplerFilter::NearestMipmapLinear,
+                    gltf::texture::MinFilter::LinearMipmapNearest => MinifySamplerFilter::LinearMipmapNearest,
+                    gltf::texture::MinFilter::LinearMipmapLinear => MinifySamplerFilter::LinearMipmapLinear,
+                };
+            }
         }
-    }
 
-    // Base-color texture (sRGB)
-    if let Some(info) = pbr.base_color_texture() {
-        update_sampler(&mut mat, &info.texture());
-        let view = info.texture().source().index();
-        mat.base_color = Some(glium_srgb_texture(facade, &images[view])?);
-    }
+        // Base-color texture (sRGB)
+        if let Some(info) = pbr.base_color_texture() {
+            update_sampler(&mut mat, &info.texture());
+            let view = info.texture().source().index();
+            mat.base_color = Some(glium_srgb_texture(facade, &images[view])?);
+        }
 
-    // Metallic-Roughness (linear)
-    if let Some(info) = pbr.metallic_roughness_texture() {
-        update_sampler(&mut mat, &info.texture());
-        let view = info.texture().source().index();
-        mat.metallic_roughness = Some(glium_linear_texture(facade, &images[view])?);
-    }
+        // Metallic-Roughness (linear)
+        if let Some(info) = pbr.metallic_roughness_texture() {
+            update_sampler(&mut mat, &info.texture());
+            let view = info.texture().source().index();
+            mat.metallic_roughness = Some(glium_linear_texture(facade, &images[view])?);
+        }
 
-    // Normal map (linear)
-    if let Some(info) = primitive.material().normal_texture() {
-        update_sampler(&mut mat, &info.texture());
-        let view = info.texture().source().index();
-        mat.normal = Some(glium_linear_texture(facade, &images[view])?);
-    }
+        // Normal map (linear)
+        if let Some(info) = material.normal_texture() {
+            update_sampler(&mut mat, &info.texture());
+            let view = info.texture().source().index();
+            mat.normal = Some(glium_linear_texture(facade, &images[view])?);
+        }
 
-    // Occlusion (linear)
-    if let Some(info) = primitive.material().occlusion_texture() {
-        update_sampler(&mut mat, &info.texture());
-        let view = info.texture().source().index();
-        mat.occlusion = Some(glium_linear_texture(facade, &images[view])?);
-    }
+        // Occlusion (linear)
+        if let Some(info) = material.occlusion_texture() {
+            update_sampler(&mut mat, &info.texture());
+            let view = info.texture().source().index();
+            mat.occlusion = Some(glium_linear_texture(facade, &images[view])?);
+        }
 
-    // Emissive (sRGB)
-    if let Some(info) = primitive.material().emissive_texture() {
-        update_sampler(&mut mat, &info.texture());
-        let view = info.texture().source().index();
-        mat.emissive = Some(glium_srgb_texture(facade, &images[view])?);
-    }
+        // Emissive (sRGB)
+        if let Some(info) = material.emissive_texture() {
+            update_sampler(&mut mat, &info.texture());
+            let view = info.texture().source().index();
+            mat.emissive = Some(glium_srgb_texture(facade, &images[view])?);
+        }
 
-    // KHR_texture_transform
-    if let Some(tex) = pbr.base_color_texture() {
-        if let Some(xform) = tex.texture_transform() {
-            mat.uv_offset = Vec2::new(xform.offset()[0], xform.offset()[1]);
-            mat.uv_scale  = Vec2::new(xform.scale()[0],  xform.scale()[1]);
+        // KHR_texture_transform
+        if let Some(tex) = pbr.base_color_texture() {
+            if let Some(xform) = tex.texture_transform() {
+                mat.uv_offset = Vec2::new(xform.offset()[0], xform.offset()[1]);
+                mat.uv_scale  = Vec2::new(xform.scale()[0],  xform.scale()[1]);
+            }
         }
     }
 
