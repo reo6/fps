@@ -672,6 +672,7 @@ dependencies = [
  "imgui",
  "imgui-glium-renderer",
  "imgui-winit-support",
+ "rand",
  "rapier3d",
  "winit",
 ]
