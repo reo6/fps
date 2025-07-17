@@ -1,17 +1,10 @@
-mod camera;
-mod ecs;
-mod model;
-mod gltf_loader;
-mod render;
-mod time;
-mod ui;
-
 use anyhow::Result;
-use camera::Camera;
-use ecs::{Transform};
 use glam::{Quat, Vec3, EulerRot};
 use glium::backend::glutin::SimpleWindowBuilder;
-use render::GliumRenderer;
+use raidillon_core::Time;
+use raidillon_ecs::Transform;
+use raidillon_render::{Camera, GliumRenderer, gltf_loader, ECSRenderer};
+use raidillon_ui::Gui;
 
 fn main() -> Result<()> {
     let event_loop = glium::winit::event_loop::EventLoop::builder()
@@ -19,7 +12,7 @@ fn main() -> Result<()> {
         .expect("create event-loop");
 
     let (window, display) = SimpleWindowBuilder::new()
-        .with_title("fps")
+        .with_title("raidillon")
         .with_inner_size(1280, 720)
         .build(&event_loop);
 
@@ -27,13 +20,13 @@ fn main() -> Result<()> {
     let mut ecsr = {
         let world = hecs::World::new();
         let renderer = GliumRenderer::new(display.clone())?;
-        ecs::ECSRenderer::new(renderer, world)
+        ECSRenderer::new(renderer, world)
     };
 
     // Dear ImGui integration
-    let mut gui = ui::Gui::new(&display, &window)?;
+    let mut gui = Gui::new(&display, &window)?;
 
-    let mut time = time::Time::new();
+    let mut time = Time::new();
 
     let object_ent = {
         let model_3d = gltf_loader::load_gltf("resources/models/tree.gltf", &display)?;
@@ -77,7 +70,7 @@ fn main() -> Result<()> {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => el.exit(),
                     WindowEvent::Resized(sz) => {
-                        ecsr.world.query_one_mut::<&mut crate::camera::Camera>(camera_ent).map(|mut cam| {
+                        ecsr.world.query_one_mut::<&mut Camera>(camera_ent).map(|mut cam| {
                             cam.aspect = sz.width as f32 / sz.height as f32;
                         });
                     }

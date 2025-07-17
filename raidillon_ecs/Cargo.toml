@@ -1,0 +1,8 @@
+[package]
+name = "raidillon_ecs"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+glam = "0.30.4"
+hecs = "0.10.5"

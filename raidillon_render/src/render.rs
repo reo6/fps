@@ -1,5 +1,5 @@
 use crate::camera::Camera;
-use crate::ecs::{ModelHandle, Transform};
+use raidillon_ecs::{ModelHandle, Transform};
 use crate::model::{Model, Mesh};
 use glium::texture::{RawImage2d, SrgbTexture2d};
 use glium::{uniform, Program, Surface};
@@ -26,8 +26,8 @@ pub struct GliumRenderer {
 
 impl GliumRenderer {
     pub fn new(display: glium::Display<WindowSurface>) -> anyhow::Result<Self> {
-        const VERT_SRC: &str = include_str!("../resources/shaders/gl_textured.vert");
-        const FRAG_SRC: &str = include_str!("../resources/shaders/gl_textured.frag");
+        const VERT_SRC: &str = include_str!("../../resources/shaders/gl_textured.vert");
+        const FRAG_SRC: &str = include_str!("../../resources/shaders/gl_textured.frag");
 
         let program = Program::from_source(&display, VERT_SRC, FRAG_SRC, None)?;
 
@@ -46,8 +46,8 @@ impl GliumRenderer {
             .. Default::default()
         };
 
-        let sky_vert = include_str!("../resources/shaders/skybox.vert");
-        let sky_frag = include_str!("../resources/shaders/skybox.frag");
+        let sky_vert = include_str!("../../resources/shaders/skybox.vert");
+        let sky_frag = include_str!("../../resources/shaders/skybox.frag");
         let skybox_program = Program::from_source(&display, sky_vert, sky_frag, None)?;
 
         let image = ImageReader::open("resources/skyboxes/sky_24_2k.png")?.decode()?.to_rgba8();

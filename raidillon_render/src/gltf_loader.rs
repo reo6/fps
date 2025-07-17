@@ -177,4 +177,4 @@ fn to_rgba(img: &gltf::image::Data) -> Vec<u8> {
         }
         _ => img.pixels.clone(),
     }
-} 
+}

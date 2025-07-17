@@ -31,4 +31,4 @@ impl Time {
     pub fn total_seconds(&self) -> f32 {
         self.total.as_secs_f32()
     }
-} 
+}
