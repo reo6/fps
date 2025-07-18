@@ -5,6 +5,17 @@ use raidillon_core::Time;
 use raidillon_ecs::Transform;
 use raidillon_render::{Camera, GliumRenderer, gltf_loader, ECSRenderer};
 use raidillon_ui::Gui;
+use raidillon_input::{Input, FPSCameraController};
+use winit::keyboard::KeyCode;
+use winit::window::CursorGrabMode;
+
+#[derive(Copy, Clone, Eq, PartialEq, Hash)]
+enum Action {
+    MoveForward,
+    MoveBackward,
+    MoveLeft,
+    MoveRight,
+}
 
 fn main() -> Result<()> {
     let event_loop = glium::winit::event_loop::EventLoop::builder()
@@ -25,6 +36,17 @@ fn main() -> Result<()> {
 
     // Dear ImGui integration
     let mut gui = Gui::new(&display, &window)?;
+
+    let mut input = Input::<Action>::new();
+    input.map_key(KeyCode::KeyW, Action::MoveForward);
+    input.map_key(KeyCode::KeyS, Action::MoveBackward);
+    input.map_key(KeyCode::KeyA, Action::MoveLeft);
+    input.map_key(KeyCode::KeyD, Action::MoveRight);
+
+    let mut camera_controller = FPSCameraController::new(Vec3::new(0.0, 0.0, 2.0));
+
+    let mut cursor_grabbed = false;
+    let mut attempted_initial_grab = false;
 
     let mut time = Time::new();
 
@@ -65,6 +87,8 @@ fn main() -> Result<()> {
             use glium::winit::event::{Event, WindowEvent};
 
             gui.handle_event(&window, &event);
+
+            input.handle_event(&event);
 
             match event {
                 Event::WindowEvent { event, .. } => match event {
@@ -110,6 +134,51 @@ fn main() -> Result<()> {
                 },
                 Event::AboutToWait => {
                     time.tick();
+
+                    if !attempted_initial_grab {
+                        attempted_initial_grab = true;
+                        if window
+                            .set_cursor_grab(CursorGrabMode::Confined)
+                            .or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked))
+                            .is_ok()
+                        {
+                            window.set_cursor_visible(false);
+                            cursor_grabbed = true;
+                        }
+                    }
+
+                    {
+                        let dt = time.delta_seconds();
+                        camera_controller.update(
+                            &input,
+                            dt,
+                            cursor_grabbed,
+                            (Action::MoveForward, Action::MoveBackward, Action::MoveLeft, Action::MoveRight),
+                        );
+
+                        if input.key_pressed(KeyCode::Escape) {
+                            if cursor_grabbed {
+                                let _ = window.set_cursor_grab(CursorGrabMode::None);
+                                window.set_cursor_visible(true);
+                                cursor_grabbed = false;
+                            } else if window
+                                .set_cursor_grab(CursorGrabMode::Confined)
+                                .or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked))
+                                .is_ok()
+                            {
+                                window.set_cursor_visible(false);
+                                cursor_grabbed = true;
+                            }
+                        }
+
+                        if let Ok(mut cam) = ecsr.world.query_one_mut::<&mut Camera>(camera_ent) {
+                            cam.eye    = camera_controller.position;
+                            cam.center = camera_controller.position + camera_controller.front();
+                        }
+                    }
+
+                    input.end_frame();
+
                     gui.prepare_frame(&window);
                     window.request_redraw();
                 }

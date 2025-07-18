@@ -1748,8 +1748,17 @@ dependencies = [
  "hecs",
  "raidillon_core",
  "raidillon_ecs",
+ "raidillon_input",
  "raidillon_render",
  "raidillon_ui",
+ "winit",
+]
+
+[[package]]
+name = "raidillon_input"
+version = "0.1.0"
+dependencies = [
+ "glam",
  "winit",
 ]
 
