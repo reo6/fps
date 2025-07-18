@@ -1743,8 +1743,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "glam",
- "glium",
- "glutin",
  "hecs",
  "raidillon_core",
  "raidillon_ecs",
@@ -1774,6 +1772,7 @@ dependencies = [
  "hecs",
  "image",
  "raidillon_ecs",
+ "winit",
 ]
 
 [[package]]
@@ -1785,6 +1784,7 @@ dependencies = [
  "imgui",
  "imgui-glium-renderer",
  "imgui-winit-support",
+ "raidillon_render",
  "winit",
 ]
 

@@ -1,13 +1,13 @@
 use anyhow::Result;
 use glam::{Quat, Vec3, EulerRot};
-use glium::backend::glutin::SimpleWindowBuilder;
 use raidillon_core::Time;
 use raidillon_ecs::Transform;
-use raidillon_render::{Camera, GliumRenderer, gltf_loader, ECSRenderer};
+use raidillon_render::{Camera, ECSRenderer, init_render_window, DisplayHandle};
 use raidillon_ui::Gui;
 use raidillon_input::{Input, FPSCameraController};
 use winit::keyboard::KeyCode;
 use winit::window::CursorGrabMode;
+use winit::event::MouseButton;
 
 #[derive(Copy, Clone, Eq, PartialEq, Hash)]
 enum Action {
@@ -18,24 +18,17 @@ enum Action {
 }
 
 fn main() -> Result<()> {
-    let event_loop = glium::winit::event_loop::EventLoop::builder()
+    let event_loop = winit::event_loop::EventLoop::builder()
         .build()
         .expect("create event-loop");
 
-    let (window, display) = SimpleWindowBuilder::new()
-        .with_title("raidillon")
-        .with_inner_size(1280, 720)
-        .build(&event_loop);
+    let (window, _display): (winit::window::Window, DisplayHandle) = init_render_window(&event_loop, "raidillon", (1280, 720))?;
 
     // Create ECS renderer which internally owns both the world and the renderer
-    let mut ecsr = {
-        let world = hecs::World::new();
-        let renderer = GliumRenderer::new(display.clone())?;
-        ECSRenderer::new(renderer, world)
-    };
+    let mut ecsr = ECSRenderer::from_display_handle(&_display)?;
 
     // Dear ImGui integration
-    let mut gui = Gui::new(&display, &window)?;
+    let mut gui = Gui::new(&_display, &window)?;
 
     let mut input = Input::<Action>::new();
     input.map_key(KeyCode::KeyW, Action::MoveForward);
@@ -45,28 +38,21 @@ fn main() -> Result<()> {
 
     let mut camera_controller = FPSCameraController::new(Vec3::new(0.0, 0.0, 2.0));
 
-    let mut cursor_grabbed = false;
-    let mut attempted_initial_grab = false;
+    let mut right_mouse_held = false;
 
     let mut time = Time::new();
 
-    let object_ent = {
-        let model_3d = gltf_loader::load_gltf("resources/models/tree.gltf", &display)?;
-        ecsr.spawn_mesh(model_3d, Transform {
-            translation: Vec3::new(0.0, -2.5, -5.0),
-            rotation:    Quat::IDENTITY,
-            scale:       Vec3::new(0.01, 0.01, 0.01),
-        })
-    };
+    let object_ent = ecsr.load_mesh_from_gltf("resources/models/tree.gltf", Transform {
+        translation: Vec3::new(0.0, -2.5, -5.0),
+        rotation:    Quat::IDENTITY,
+        scale:       Vec3::new(0.01, 0.01, 0.01),
+    })?;
 
-    let ground_ent = {
-        let model_3d = gltf_loader::load_gltf("resources/models/plane.gltf", &display)?;
-        ecsr.spawn_mesh(model_3d, Transform {
-            translation: Vec3::new(0.0, -1.5, 0.0),
-            rotation:    Quat::IDENTITY,
-            scale:       Vec3::new(1.0, 1.0, 1.0),
-        })
-    };
+    let ground_ent = ecsr.load_mesh_from_gltf("resources/models/plane.gltf", Transform {
+        translation: Vec3::new(0.0, -1.5, 0.0),
+        rotation:    Quat::IDENTITY,
+        scale:       Vec3::new(1.0, 1.0, 1.0),
+    })?;
 
 
     let camera_ent = {
@@ -84,7 +70,7 @@ fn main() -> Result<()> {
 
     event_loop
         .run(move |event, el| {
-            use glium::winit::event::{Event, WindowEvent};
+            use winit::event::{Event, WindowEvent};
 
             gui.handle_event(&window, &event);
 
@@ -98,13 +84,33 @@ fn main() -> Result<()> {
                             cam.aspect = sz.width as f32 / sz.height as f32;
                         });
                     }
+                    WindowEvent::MouseInput { state, button, .. } => {
+                        if button == MouseButton::Right {
+                            match state {
+                                winit::event::ElementState::Pressed => {
+                                    if window
+                                        .set_cursor_grab(CursorGrabMode::Confined)
+                                        .or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked))
+                                        .is_ok()
+                                    {
+                                        window.set_cursor_visible(false);
+                                        right_mouse_held = true;
+                                    }
+                                }
+                                winit::event::ElementState::Released => {
+                                    let _ = window.set_cursor_grab(CursorGrabMode::None);
+                                    window.set_cursor_visible(true);
+                                    right_mouse_held = false;
+                                }
+                            }
+                        }
+                    }
                     WindowEvent::RedrawRequested => {
-                        let mut target = display.draw();
-
-                        ecsr.render_into(&mut target);
-
-                        gui.render_with(&mut target, &window, |ui| {
+                        gui.render_world(&mut ecsr, &window, |ui, ecsr| {
                             if let Ok(mut tr) = ecsr.world.query_one_mut::<&mut Transform>(object_ent) {
+                                ui.text("Hold right click to control the camera");
+                                ui.text("WASD to move");
+
                                 // Translation controls
                                 let mut translation = [tr.translation.x, tr.translation.y, tr.translation.z];
                                 if ui.input_float3("Translation", &mut translation).build() {
@@ -128,48 +134,20 @@ fn main() -> Result<()> {
                                 }
                             }
                         });
-                        target.finish().unwrap();
                     }
                     _ => {}
                 },
                 Event::AboutToWait => {
                     time.tick();
 
-                    if !attempted_initial_grab {
-                        attempted_initial_grab = true;
-                        if window
-                            .set_cursor_grab(CursorGrabMode::Confined)
-                            .or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked))
-                            .is_ok()
-                        {
-                            window.set_cursor_visible(false);
-                            cursor_grabbed = true;
-                        }
-                    }
-
                     {
                         let dt = time.delta_seconds();
                         camera_controller.update(
                             &input,
                             dt,
-                            cursor_grabbed,
+                            right_mouse_held,
                             (Action::MoveForward, Action::MoveBackward, Action::MoveLeft, Action::MoveRight),
                         );
-
-                        if input.key_pressed(KeyCode::Escape) {
-                            if cursor_grabbed {
-                                let _ = window.set_cursor_grab(CursorGrabMode::None);
-                                window.set_cursor_visible(true);
-                                cursor_grabbed = false;
-                            } else if window
-                                .set_cursor_grab(CursorGrabMode::Confined)
-                                .or_else(|_| window.set_cursor_grab(CursorGrabMode::Locked))
-                                .is_ok()
-                            {
-                                window.set_cursor_visible(false);
-                                cursor_grabbed = true;
-                            }
-                        }
 
                         if let Ok(mut cam) = ecsr.world.query_one_mut::<&mut Camera>(camera_ent) {
                             cam.eye    = camera_controller.position;

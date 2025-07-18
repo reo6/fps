@@ -10,3 +10,4 @@ imgui = "0.12"
 imgui-winit-support = "0.13"
 imgui-glium-renderer = "0.13"
 winit = "0.30"
+raidillon_render = { path = "../raidillon_render" }

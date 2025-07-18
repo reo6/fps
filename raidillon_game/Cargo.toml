@@ -6,8 +6,6 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.98"
 glam   = "0.30.4"
-glium  = { version = "0.35.0", features = ["glutin_backend", "simple_window_builder"] }
-glutin = { version = "0.32.3", default-features = false }
 winit = "0.30"
 raidillon_render = { path = "../raidillon_render" }
 raidillon_ecs    = { path = "../raidillon_ecs" }

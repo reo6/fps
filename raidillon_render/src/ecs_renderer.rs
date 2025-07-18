@@ -12,6 +12,11 @@ pub struct ECSRenderer {
 }
 
 impl ECSRenderer {
+    pub fn from_display_handle(handle: &crate::window::DisplayHandle) -> anyhow::Result<Self> {
+        let world = World::new();
+        let renderer = crate::render::GliumRenderer::new(handle.as_inner().clone())?;
+        Ok(Self { renderer, world })
+    }
     pub fn new(renderer: GliumRenderer, world: World) -> Self {
         Self { renderer, world }
     }
@@ -44,5 +49,14 @@ impl ECSRenderer {
     /// other render passes (e.g. Dear ImGui).
     pub fn render_into<S: glium::Surface>(&mut self, target: &mut S) {
         self.renderer.render_into(&self.world, target);
+    }
+
+    pub fn load_mesh_from_gltf<P: AsRef<std::path::Path> + std::fmt::Debug>(
+        &mut self,
+        path: P,
+        transform: Transform,
+    ) -> anyhow::Result<Entity> {
+        let model = crate::gltf_loader::load_gltf(path, self.renderer.display())?;
+        Ok(self.spawn_mesh(model, transform))
     }
 }

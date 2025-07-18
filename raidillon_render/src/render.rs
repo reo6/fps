@@ -160,4 +160,8 @@ impl GliumRenderer {
         self.draw_scene(world, &mut frame);
         frame.finish().unwrap();
     }
+
+    pub fn display(&self) -> &glium::Display<WindowSurface> {
+        &self.display
+    }
 }
