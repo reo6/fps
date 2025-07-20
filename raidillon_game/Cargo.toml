@@ -13,3 +13,6 @@ raidillon_ui     = { path = "../raidillon_ui" }
 raidillon_core  = { path = "../raidillon_core" }
 hecs = "0.10.5"
 raidillon_input = { path = "../raidillon_input" }
+raidillon_physics = { path = "../raidillon_physics" }
+rapier3d = "0.26.1"
+nalgebra = { version = "0.33", features = ["macros"] }

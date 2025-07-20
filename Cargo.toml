@@ -6,4 +6,5 @@ members = [
     "raidillon_ui",
     "raidillon_game",
     "raidillon_input",
+    "raidillon_physics",
 ]

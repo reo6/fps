@@ -87,6 +87,8 @@ impl Gui {
         });
 
         target.finish().expect("Failed to swap buffers");
+
+        ecsr.renderer.set_colliders(None);
     }
 
     pub fn ui<F>(&mut self, build: F)

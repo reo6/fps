@@ -1,10 +1,13 @@
 use crate::camera::Camera;
 use raidillon_ecs::{ModelHandle, Transform};
+
 use crate::model::{Model, Mesh};
+use crate::debug::ColliderDebugRenderer;
+use rapier3d::prelude::ColliderSet;
 use glium::texture::{RawImage2d, SrgbTexture2d};
 use glium::{uniform, Program, Surface};
 use glium::uniforms::{MinifySamplerFilter, MagnifySamplerFilter, SamplerWrapFunction};
-use glam::{Vec3, Vec4};
+use glam::{Vec3, Vec4, Mat4};
 use hecs::World;
 use glium::glutin::surface::WindowSurface;
 use image::io::Reader as ImageReader;
@@ -22,6 +25,11 @@ pub struct GliumRenderer {
     skybox_program: Program,
     skybox_texture: SrgbTexture2d,
     skybox_mesh: Mesh,
+
+    debug_renderer: ColliderDebugRenderer,
+    show_colliders: bool,
+
+    collider_set: Option<*const ColliderSet>,
 }
 
 impl GliumRenderer {
@@ -58,6 +66,8 @@ impl GliumRenderer {
         let cube_model = crate::gltf_loader::load_gltf("resources/models/cube.gltf", &display)?;
         let skybox_mesh = cube_model.mesh;
 
+        let debug_renderer = crate::debug::ColliderDebugRenderer::new(&display)?;
+
         Ok(Self {
             display,
             program,
@@ -67,7 +77,21 @@ impl GliumRenderer {
             skybox_program,
             skybox_texture,
             skybox_mesh,
+            debug_renderer,
+            show_colliders: false,
+            collider_set: None,
         })
+    }
+
+    /// Provide the collider set for the upcoming frame. Pass `None` when no
+    /// collider debug rendering is desired or right after rendering to release
+    /// the reference.
+    pub fn set_colliders(&mut self, colliders: Option<&ColliderSet>) {
+        self.collider_set = colliders.map(|c| c as *const ColliderSet);
+    }
+
+    pub fn set_show_colliders(&mut self, v: bool) {
+        self.show_colliders = v;
     }
 
     fn draw_scene<S: Surface>(&self, world: &World, target: &mut S) {
@@ -147,6 +171,18 @@ impl GliumRenderer {
             &uniforms,
             &sky_params,
         ).unwrap();
+
+        if self.show_colliders {
+            if let Some(ptr) = self.collider_set {
+                // SAFETY: `set_colliders` guarantees the pointer is valid for
+                // the duration of this render call and we only read from it.
+                unsafe {
+                    let colset: &ColliderSet = &*ptr;
+                    let vp_mat = cam.projection() * cam.view();
+                    self.debug_renderer.draw(colset, vp_mat, target);
+                }
+            }
+        }
     }
 
     pub fn render_into<S: Surface>(&mut self, world: &World, target: &mut S) {

@@ -4,6 +4,7 @@ pub mod gltf_loader;
 pub mod render;
 pub mod ecs_renderer;
 pub mod window;
+pub mod debug;
 
 pub use camera::Camera;
 pub use render::GliumRenderer;

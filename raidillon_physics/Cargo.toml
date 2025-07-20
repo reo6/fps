@@ -1,0 +1,10 @@
+[package]
+name = "raidillon_physics"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+rapier3d = "0.26.1"
+glam = "0.30.4"
+nalgebra = { version = "0.33" }
+raidillon_ecs = { path = "../raidillon_ecs" } 
