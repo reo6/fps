@@ -106,7 +106,12 @@ fn main() -> Result<()> {
                         }
                     }
                     WindowEvent::RedrawRequested => {
-                        gui.render_world(&mut ecsr, &window, |ui, ecsr| {
+                        // First render the 3D world
+                        let mut target = ecsr.renderer.display().draw();
+                        ecsr.render_into(&mut target);
+
+                        // Then overlay ImGui on top
+                        gui.render_with(&mut target, &window, |ui| {
                             if let Ok(mut tr) = ecsr.world.query_one_mut::<&mut Transform>(object_ent) {
                                 ui.text("Hold right click to control the camera");
                                 ui.text("WASD to move");
@@ -134,6 +139,8 @@ fn main() -> Result<()> {
                                 }
                             }
                         });
+
+                        target.finish().expect("Failed to swap buffers");
                     }
                     _ => {}
                 },

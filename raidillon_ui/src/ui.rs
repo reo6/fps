@@ -6,7 +6,7 @@ use imgui_winit_support::{HiDpiMode, WinitPlatform};
 use imgui_glium_renderer::Renderer as ImguiGliumRenderer;
 use winit::window::Window;
 use glium::Frame;
-use raidillon_render::{DisplayHandle, ECSRenderer};
+use raidillon_render::DisplayHandle;
 
 /// Convenience wrapper that owns all ImGui state required for integration with
 /// winit + glium.
@@ -72,21 +72,6 @@ impl Gui {
             .renderer
             .render(target, draw_data)
             .expect("imgui rendering failed");
-    }
-
-    pub fn render_world<F>(&mut self, ecsr: &mut ECSRenderer, window: &Window, build_ui: F)
-    where
-        F: FnOnce(&Ui, &mut ECSRenderer),
-    {
-        let mut target = ecsr.renderer.display().draw();
-
-        ecsr.render_into(&mut target);
-
-        self.render_with(&mut target, window, |ui| {
-            build_ui(ui, ecsr);
-        });
-
-        target.finish().expect("Failed to swap buffers");
     }
 
     pub fn ui<F>(&mut self, build: F)
