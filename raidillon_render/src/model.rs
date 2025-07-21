@@ -51,7 +51,13 @@ impl Default for Material {
     }
 }
 
+// Implement the Material trait from raidillon_core
+impl raidillon_core::Material for Material {}
+
 pub struct Model {
     pub mesh:     Mesh,
     pub material: Material,
 }
+
+// Implement the Model trait from raidillon_core
+impl raidillon_core::Model for Model {}

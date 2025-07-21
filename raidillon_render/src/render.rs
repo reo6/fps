@@ -1,6 +1,7 @@
 use crate::camera::Camera;
 use raidillon_ecs::{ModelHandle, Transform};
-use crate::model::{Model, Mesh};
+use crate::model::{Model, Material, Mesh};
+use raidillon_core::AssetManager;
 use glium::texture::{RawImage2d, SrgbTexture2d};
 use glium::{uniform, Program, Surface};
 use glium::uniforms::{MinifySamplerFilter, MagnifySamplerFilter, SamplerWrapFunction};
@@ -163,5 +164,95 @@ impl GliumRenderer {
 
     pub fn display(&self) -> &glium::Display<WindowSurface> {
         &self.display
+    }
+
+    pub fn render_into_with_assets<S: Surface>(&mut self, world: &World, assets: &AssetManager<Model, Material>, target: &mut S) {
+        target.clear_color_and_depth((0.1, 0.1, 0.15, 1.0), 1.0);
+        self.draw_scene_with_assets(world, assets, target);
+    }
+
+    fn draw_scene_with_assets<S: Surface>(&mut self, world: &World, assets: &AssetManager<Model, Material>, target: &mut S) {
+        let cam = match world.query::<&Camera>().iter().next() {
+            Some((_, cam)) => *cam,
+            None => {
+                eprintln!("[renderer] No camera component found. Skipping frame");
+                return;
+            }
+        };
+
+        // Direction from the light source (0,+Y) towards the scene.
+        let light_dir: Vec3 = Vec3::new(0.0, -1.0, 0.0).normalize();
+
+        for (_, (tr, mh)) in world.query::<(&Transform, &ModelHandle)>().iter() {
+            let model = match assets.get_model(raidillon_core::ModelId(mh.0)) {
+                Some(model) => model,
+                None => {
+                    eprintln!("[renderer] Model with ID {} not found in assets", mh.0);
+                    continue;
+                }
+            };
+            let mesh  = &model.mesh;
+            let mat   = &model.material;
+
+            let tex_ref: &SrgbTexture2d = mat.base_color.as_ref().unwrap_or(&self.white_tex);
+
+            let mut sampler = tex_ref.sampled();
+            sampler = sampler.wrap_function(SamplerWrapFunction::Repeat);
+            sampler = sampler.minify_filter(MinifySamplerFilter::Linear);
+            sampler = sampler.magnify_filter(MagnifySamplerFilter::Linear);
+
+            let c = mat.base_color_factor;
+
+            let uniforms = uniform! {
+                model:      tr.matrix().to_cols_array_2d(),
+                view:       cam.view().to_cols_array_2d(),
+                projection: cam.projection().to_cols_array_2d(),
+                u_light:    [light_dir.x, light_dir.y, light_dir.z],
+                tex:        sampler,
+                color:      [c[0], c[1], c[2]],
+                uv_offset:  [mat.uv_offset.x, mat.uv_offset.y],
+                uv_scale:   [mat.uv_scale.x,  mat.uv_scale.y],
+            };
+
+            target.draw(
+                &mesh.vbuf,
+                &mesh.ibuf,
+                &self.program,
+                &uniforms,
+                &self.params,
+            ).unwrap();
+        }
+
+        // Render skybox
+        let mut sky_view = cam.view();
+        sky_view.w_axis = Vec4::new(0.0, 0.0, 0.0, 1.0);
+
+        let mut sampler = self.skybox_texture.sampled();
+        sampler = sampler.wrap_function(SamplerWrapFunction::Clamp);
+        sampler = sampler.minify_filter(MinifySamplerFilter::Linear);
+        sampler = sampler.magnify_filter(MagnifySamplerFilter::Linear);
+
+        let uniforms = uniform! {
+            view: sky_view.to_cols_array_2d(),
+            projection: cam.projection().to_cols_array_2d(),
+            equirect: sampler,
+        };
+
+        let sky_params = glium::DrawParameters {
+            depth: glium::Depth {
+                test: DepthTest::IfLessOrEqual,
+                write: false,
+                .. Default::default()
+            },
+            .. Default::default()
+        };
+
+        target.draw(
+            &self.skybox_mesh.vbuf,
+            &self.skybox_mesh.ibuf,
+            &self.skybox_program,
+            &uniforms,
+            &sky_params,
+        ).unwrap();
     }
 }

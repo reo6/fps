@@ -1728,6 +1728,11 @@ checksum = "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f"
 [[package]]
 name = "raidillon_core"
 version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "glam",
+ "hecs",
+]
 
 [[package]]
 name = "raidillon_ecs"
@@ -1743,6 +1748,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "glam",
+ "glium",
  "hecs",
  "raidillon_core",
  "raidillon_ecs",
@@ -1757,6 +1763,9 @@ name = "raidillon_input"
 version = "0.1.0"
 dependencies = [
  "glam",
+ "hecs",
+ "raidillon_core",
+ "raidillon_render",
  "winit",
 ]
 
@@ -1771,6 +1780,7 @@ dependencies = [
  "glutin",
  "hecs",
  "image",
+ "raidillon_core",
  "raidillon_ecs",
  "winit",
 ]

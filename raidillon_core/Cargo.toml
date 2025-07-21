@@ -2,3 +2,8 @@
 name = "raidillon_core"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+anyhow = "1.0.98"
+glam = "0.30.4"
+hecs = "0.10.5"

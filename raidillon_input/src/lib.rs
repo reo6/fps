@@ -5,7 +5,12 @@ use winit::event::{DeviceEvent, ElementState, Event, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
 pub mod camera;
+pub mod input_system;
+pub mod camera_system;
+
 pub use camera::FPSCameraController;
+pub use input_system::InputSystem;
+pub use camera_system::CameraSystem;
 
 pub struct Input<A: Copy + Eq + Hash> {
     pressed_keys: HashSet<KeyCode>,

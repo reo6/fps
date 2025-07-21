@@ -13,5 +13,5 @@ impl Transform {
     }
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct ModelHandle(pub usize);

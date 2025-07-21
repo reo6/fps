@@ -5,4 +5,7 @@ edition = "2021"
 
 [dependencies]
 winit = "0.30" 
-glam = "0.30.4" 
+glam = "0.30.4"
+hecs = "0.10.5"
+raidillon_core = { path = "../raidillon_core" }
+raidillon_render = { path = "../raidillon_render" } 

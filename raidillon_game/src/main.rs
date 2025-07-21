@@ -1,20 +1,52 @@
 use anyhow::Result;
 use glam::{Quat, Vec3, EulerRot};
-use raidillon_core::Time;
+use raidillon_core::{Time, EventBus, GameEvent, InputAction, System, SystemRegistry, AssetManager, Model, Material};
 use raidillon_ecs::Transform;
-use raidillon_render::{Camera, ECSRenderer, init_render_window, DisplayHandle};
+use raidillon_render::{RenderSystem, init_render_window, DisplayHandle};
 use raidillon_ui::Gui;
-use raidillon_input::{Input, FPSCameraController};
-use winit::keyboard::KeyCode;
+use raidillon_input::{InputSystem, CameraSystem};
+use raidillon_game::GameState;
 use winit::window::CursorGrabMode;
 use winit::event::MouseButton;
+use hecs::World;
 
-#[derive(Copy, Clone, Eq, PartialEq, Hash)]
-enum Action {
-    MoveForward,
-    MoveBackward,
-    MoveLeft,
-    MoveRight,
+// Wrapper to make RenderSystem implement the System trait
+struct RenderSystemWrapper {
+    render_system: RenderSystem,
+}
+
+impl RenderSystemWrapper {
+    fn new(display: DisplayHandle) -> anyhow::Result<Self> {
+        Ok(Self {
+            render_system: RenderSystem::new(display)?,
+        })
+    }
+
+    fn load_model(&mut self, path: &str) -> anyhow::Result<raidillon_core::ModelId> {
+        self.render_system.load_model(path)
+    }
+
+    fn render(&mut self, world: &World, target: &mut impl glium::Surface) {
+        self.render_system.render(world, target)
+    }
+
+    fn display(&self) -> &glium::Display<glium::glutin::surface::WindowSurface> {
+        self.render_system.display()
+    }
+}
+
+impl System for RenderSystemWrapper {
+    fn update(&mut self, _world: &mut World, _resources: &AssetManager<dyn Model, dyn Material>, _events: &mut EventBus, _dt: f32) {
+        // Rendering is handled separately in the main loop
+    }
+
+    fn handle_event(&mut self, _event: &GameEvent, _world: &mut World) {
+        // RenderSystem doesn't need to respond to events currently
+    }
+
+    fn name(&self) -> &'static str {
+        "RenderSystem"
+    }
 }
 
 fn main() -> Result<()> {
@@ -24,65 +56,50 @@ fn main() -> Result<()> {
 
     let (window, _display): (winit::window::Window, DisplayHandle) = init_render_window(&event_loop, "raidillon", (1280, 720))?;
 
-    // Create ECS renderer which internally owns both the world and the renderer
-    let mut ecsr = ECSRenderer::from_display_handle(&_display)?;
+    // Create game state and systems
+    let mut game_state = GameState::new();
+    let mut render_system_wrapper = RenderSystemWrapper::new(_display.clone())?;
 
     // Dear ImGui integration
     let mut gui = Gui::new(&_display, &window)?;
 
-    let mut input = Input::<Action>::new();
-    input.map_key(KeyCode::KeyW, Action::MoveForward);
-    input.map_key(KeyCode::KeyS, Action::MoveBackward);
-    input.map_key(KeyCode::KeyA, Action::MoveLeft);
-    input.map_key(KeyCode::KeyD, Action::MoveRight);
+    // Create system registry and register systems
+    let mut system_registry = SystemRegistry::new();
+    let mut event_bus = EventBus::new();
+    let mut input_system = InputSystem::new(); // Keep this for direct access
+    let mut camera_system = CameraSystem::new(game_state.camera_entity); // Keep this for direct access
 
-    let mut camera_controller = FPSCameraController::new(Vec3::new(0.0, 0.0, 2.0));
+    // Register systems later when we have proper asset manager integration
+    // For now, manage systems directly in main loop
 
     let mut right_mouse_held = false;
-
     let mut time = Time::new();
 
-    let object_ent = ecsr.load_mesh_from_gltf("resources/models/tree.gltf", Transform {
-        translation: Vec3::new(0.0, -2.5, -5.0),
-        rotation:    Quat::IDENTITY,
-        scale:       Vec3::new(0.01, 0.01, 0.01),
-    })?;
+    // Load models using the RenderSystem
+    let object_model_id = render_system_wrapper.load_model("resources/models/tree.gltf")?;
+    let ground_model_id = render_system_wrapper.load_model("resources/models/plane.gltf")?;
 
-    let ground_ent = ecsr.load_mesh_from_gltf("resources/models/plane.gltf", Transform {
-        translation: Vec3::new(0.0, -1.5, 0.0),
-        rotation:    Quat::IDENTITY,
-        scale:       Vec3::new(1.0, 1.0, 1.0),
-    })?;
+    // Update the model handles in game state using the new method
+    game_state.update_entity_model(game_state.object_entity, object_model_id)?;
+    game_state.update_entity_model(game_state.ground_entity, ground_model_id)?;
 
-
-    let camera_ent = {
-        let (w, h): (u32, u32) = window.inner_size().into();
-        ecsr.world.spawn((Camera {
-            eye:    Vec3::new(0.0, 0.0, 2.0),
-            center: Vec3::ZERO,
-            up:     Vec3::Y,
-            fovy:   60_f32.to_radians(),
-            aspect: w as f32 / h as f32,
-            znear:  0.1,
-            zfar:   100.0,
-        },))
-    };
+    // Set initial camera aspect ratio
+    let (w, h): (u32, u32) = window.inner_size().into();
+    game_state.resize_camera(w, h);
 
     event_loop
         .run(move |event, el| {
             use winit::event::{Event, WindowEvent};
 
             gui.handle_event(&window, &event);
-
-            input.handle_event(&event);
+            input_system.handle_event(&event);
 
             match event {
                 Event::WindowEvent { event, .. } => match event {
                     WindowEvent::CloseRequested => el.exit(),
                     WindowEvent::Resized(sz) => {
-                        ecsr.world.query_one_mut::<&mut Camera>(camera_ent).map(|mut cam| {
-                            cam.aspect = sz.width as f32 / sz.height as f32;
-                        });
+                        camera_system.resize_camera(game_state.world_mut(), sz.width, sz.height);
+                        event_bus.emit(GameEvent::WindowResize { width: sz.width, height: sz.height });
                     }
                     WindowEvent::MouseInput { state, button, .. } => {
                         if button == MouseButton::Right {
@@ -107,12 +124,13 @@ fn main() -> Result<()> {
                     }
                     WindowEvent::RedrawRequested => {
                         // First render the 3D world
-                        let mut target = ecsr.renderer.display().draw();
-                        ecsr.render_into(&mut target);
+                        let mut target = render_system_wrapper.display().draw();
+                        render_system_wrapper.render(game_state.world(), &mut target);
 
                         // Then overlay ImGui on top
                         gui.render_with(&mut target, &window, |ui| {
-                            if let Ok(mut tr) = ecsr.world.query_one_mut::<&mut Transform>(object_ent) {
+                            let object_entity = game_state.object_entity;
+                            if let Ok(tr) = game_state.world_mut().query_one_mut::<&mut Transform>(object_entity) {
                                 ui.text("Hold right click to control the camera");
                                 ui.text("WASD to move");
 
@@ -146,24 +164,31 @@ fn main() -> Result<()> {
                 },
                 Event::AboutToWait => {
                     time.tick();
-
-                    {
-                        let dt = time.delta_seconds();
-                        camera_controller.update(
-                            &input,
-                            dt,
-                            right_mouse_held,
-                            (Action::MoveForward, Action::MoveBackward, Action::MoveLeft, Action::MoveRight),
-                        );
-
-                        if let Ok(mut cam) = ecsr.world.query_one_mut::<&mut Camera>(camera_ent) {
-                            cam.eye    = camera_controller.position;
-                            cam.center = camera_controller.position + camera_controller.front();
+                    let dt = time.delta_seconds();
+                    
+                    // Update input system and generate events
+                    input_system.update(&mut event_bus, right_mouse_held);
+                    
+                    // Process input events for camera movement
+                    let mouse_delta = input_system.mouse_delta();
+                    
+                    // Handle camera input actions
+                    for event in event_bus.events() {
+                        if let GameEvent::InputAction(action) = event {
+                            camera_system.handle_input_action(*action, dt);
                         }
                     }
+                    
+                    // Update camera with mouse movement
+                    camera_system.update(game_state.world_mut(), dt, mouse_delta);
+                    
+                    // Update game state
+                    game_state.update(dt);
 
-                    input.end_frame();
+                    // Process all events
+                    event_bus.process();
 
+                    input_system.end_frame();
                     gui.prepare_frame(&window);
                     window.request_redraw();
                 }

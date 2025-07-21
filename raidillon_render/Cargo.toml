@@ -11,5 +11,6 @@ gltf   = { version = "1.4.1", features = ["import", "utils", "KHR_texture_transf
 glutin = { version = "0.32.3", default-features = false }
 hecs   = "0.10.5"
 image  = "0.25.6"
+raidillon_core = { path = "../raidillon_core" }
 raidillon_ecs = { path = "../raidillon_ecs" }
 winit = "0.30"
