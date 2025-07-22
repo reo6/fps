@@ -12,12 +12,12 @@ use glium::draw_parameters::DepthTest;
 
 pub struct GliumRenderer {
     display: glium::Display<WindowSurface>,
-    program: Program,
-    white_tex: SrgbTexture2d,
+    pub(crate) program: Program,
+    pub(crate) white_tex: SrgbTexture2d,
 
     pub models: Vec<Model>,
 
-    params: glium::DrawParameters<'static>,
+    pub(crate) params: glium::DrawParameters<'static>,
 
     skybox_program: Program,
     skybox_texture: SrgbTexture2d,

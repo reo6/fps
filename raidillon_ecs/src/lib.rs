@@ -13,5 +13,7 @@ impl Transform {
     }
 }
 
-#[derive(Clone)]
-pub struct ModelHandle(pub usize);
+#[derive(Copy, Clone)]
+pub struct ModelId(pub usize);
+
+pub type ModelHandle = ModelId;

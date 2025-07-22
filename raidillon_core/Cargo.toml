@@ -2,3 +2,11 @@
 name = "raidillon_core"
 version = "0.1.0"
 edition = "2021"
+
+[dependencies]
+glam = "0.30.4"
+hecs = "0.10.5"
+raidillon_render = { path = "../raidillon_render" }
+glium = { version = "0.35.0", features = ["glutin_backend", "simple_window_builder"] }
+raidillon_ecs = { path = "../raidillon_ecs" }
+anyhow = "1.0.98"
