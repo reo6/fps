@@ -4,8 +4,22 @@ use std::hash::Hash;
 use winit::event::{DeviceEvent, ElementState, Event, WindowEvent};
 use winit::keyboard::{KeyCode, PhysicalKey};
 
+#[derive(Copy, Clone, Eq, PartialEq, Hash, Debug)]
+pub enum Action {
+    MoveForward,
+    MoveBackward,
+    MoveLeft,
+    MoveRight,
+}
+
+pub mod input_system;
+pub use input_system::InputSystem;
+
 pub mod camera;
 pub use camera::FPSCameraController;
+
+pub mod camera_system;
+pub use camera_system::CameraSystem;
 
 pub struct Input<A: Copy + Eq + Hash> {
     pressed_keys: HashSet<KeyCode>,

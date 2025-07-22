@@ -13,3 +13,4 @@ raidillon_ui     = { path = "../raidillon_ui" }
 raidillon_core  = { path = "../raidillon_core" }
 hecs = "0.10.5"
 raidillon_input = { path = "../raidillon_input" }
+glium = { version = "0.35.0", features = ["glutin_backend", "simple_window_builder"] }
