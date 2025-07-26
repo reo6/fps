@@ -1,0 +1,10 @@
+[package]
+name = "raidillon"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glium  = { version = "0.36.0", features = ["glutin_backend", "simple_window_builder"] }
+glutin = { version = "0.32.3", default-features = false }
+hecs = "0.10.5"
+winit = "0.30"
